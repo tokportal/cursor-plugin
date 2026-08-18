@@ -1,0 +1,35 @@
+---
+description: TokPortal API and MCP usage rules — auth, credits, bundle lifecycle, 3 videos/day cap, 428 confirmation policy, secret handling. Apply when working with tokportal_* tools, the TokPortal REST API (app.tokportal.com/api/ext) or TokPortal SDKs.
+alwaysApply: false
+globs: "**/*tokportal*,**/*.tokportal*,**/tokportal/**"
+---
+
+# TokPortal API rules
+
+TokPortal is the managed social infrastructure API: real TikTok, Instagram and YouTube accounts created, warmed and operated by human account managers in 16+ countries — exposed as a REST API and an MCP server. No OAuth per account, no 25-posts/day cap, no app review.
+
+## Auth and secrets
+- REST base URL `https://app.tokportal.com/api/ext`, header `X-API-Key: sk_...` (keys = `sk_` + 64 hex, shown once). MCP remote `https://app.tokportal.com/api/ext/mcp` (OAuth 2.1 or `Authorization: Bearer sk_...`); local `npx -y tokportal-mcp` with env `TOKPORTAL_API_KEY`.
+- Never hard-code or paste API keys, webhook signing secrets, report tokens or presigned `upload_url`s in code, config committed to git, logs or chat. Read them from environment variables (`TOKPORTAL_API_KEY`).
+- Prefer the official SDKs: `@tokportal/node`, `pip install tokportal`, `github.com/tokportal/tokportal-go`, CLI `@tokportal/cli`. OpenAPI: https://developers.tokportal.com/openapi.json.
+
+## Credits
+- Every write spends the workspace's credits, debited atomically at creation checkout (bundle create / bulk / add slots / rewarm), never again at publish. Standard rates: account setup 32, video slot 2, edit 3, Advanced Niche Warming 5 per target (3-30 targets in multiples of 3, min 15), Coverage 25 / 30 days per delivered account (first period included), credential reveal 150 (post-cutoff accounts), comment task 1, ad code 7.
+- Always call `tokportal_get_credit_costs` (`GET /credit-costs`) and `tokportal_get_credit_balance` right before quoting or spending; `contract_bundle_allowance` overrides standard prices. On `BUNDLE_PRICING_CHANGED` refetch and retry with a new idempotency key. On `INSUFFICIENT_CREDITS` stop.
+- Send `Idempotency-Key` / `idempotency_key` on paid POST/PUT calls you may retry, EXCEPT secret-returning operations (`reveal_account_credentials`, `retrieve_account_verification_code`, `create_webhook_endpoint`, `create_analytics_report`, presigned `upload_video`/`upload_image`) which reject it with `IDEMPOTENCY_KEY_NOT_ALLOWED_FOR_SENSITIVE_RESPONSE`.
+
+## Lifecycle and limits
+- Bundle = one account (+ optional video slots) in one platform/country. Statuses: `draft → pending_setup → published (published_priority) → accepted → completed`; `cancelled` is terminal. Video statuses: `pending → configured → published → accepted → in_review → finalized` (72 h auto-finalize).
+- Publish requires a configured account (username, visible_name, biography, profile_picture_url) and ≥ 1 configured video for `account_and_videos`; check `GET /bundles/{id}/publish-readiness` first. New videos added to an active bundle need `POST /bundles/{id}/videos/publish-all`.
+- **Max 3 videos per target day per bundle** (`VIDEOS_PER_DAY_EXCEEDED`); dates ≥ 3 days ahead for new accounts, ≥ 1 day for existing. Scale across bundles, not by stacking posts on one account.
+- `bundle_type: "videos_only"` is the only type that accepts `account_id`. `wants_deep_warming` is discontinued; `wants_moderation` is ignored (use the Comments API, 1 credit/task).
+- Media: `video_url` = `public_url` from video upload (or any external URL, auto re-hosted); `carousel_images` / `profile_picture_url` = `storage_path` from image upload.
+- Rate limit 120 req/min per key: honour `Retry-After` / `diagnostics.retry_after_seconds`.
+
+## Safety
+- Prefer read-only tools (`tokportal_get_*`, `tokportal_list_*`, `tokportal_export_*`): they never spend credits. Ask the human before any create/configure/publish/add/rewarm/upload, and before destructive tools (`unpublish_bundle`, `reset_bundle_video`, `unschedule_bundle_video`, `delete_webhook_endpoint`, `delete_comment_task`, `cancel_account_managed_subscription`).
+- **428 policy**: `reveal_account_credentials` and `retrieve_account_verification_code` are called first WITHOUT a body → HTTP 428 with `policy_version`, price and consequences (can permanently detach the account from TokPortal). Show the full disclosure to a human; only after explicit confirmation resend with `acknowledge_support_forfeit: true` and the exact `policy_version`. On `CREDENTIAL_REVEAL_QUOTE_CHANGED` refetch and re-confirm. Ordinary account tools never return passwords or codes.
+- Ban state comes ONLY from `tokportal_list_account_bans` (`appeal_pending`, `appeal_accepted`, `appeal_refused`, `no_appeal_banned`; resolution `refund` / `remake` / `no_remake`). Never infer a ban from other signals.
+- Webhooks: HTTPS URL, store `signing_secret` once, verify `TokPortal-Signature: t=...,v1=...` = HMAC-SHA256(`<t>.<raw body>`) with constant-time compare. Subscribe at least to `account.banned`, `bundle.cancelled`, `account.remade`, `subscription.lapsed`.
+
+Docs: https://developers.tokportal.com — LLM context https://developers.tokportal.com/llms.txt — MCP guide https://developers.tokportal.com/mcp

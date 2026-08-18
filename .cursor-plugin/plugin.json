@@ -1,0 +1,16 @@
+{
+  "name": "tokportal",
+  "displayName": "TokPortal",
+  "version": "1.0.0",
+  "description": "TokPortal is the managed social infrastructure API: real TikTok, Instagram and YouTube accounts created, warmed and operated by human account managers in 16+ countries — exposed as a REST API and an MCP server. No OAuth per account, no 25-posts/day cap, no app review. This plugin adds the TokPortal MCP server (91 tokportal_* tools), API rules and 5 agent skills to Cursor.",
+  "author": {
+    "name": "TokPortal",
+    "email": "dev@tokportal.com",
+    "url": "https://tokportal.com"
+  },
+  "homepage": "https://developers.tokportal.com/mcp",
+  "repository": "https://github.com/tokportal/cursor-plugin",
+  "license": "MIT",
+  "keywords": ["mcp", "tiktok", "instagram", "youtube", "social-media", "ai-agents", "tokportal", "cursor", "skills", "rules"],
+  "logo": "assets/logo.png"
+}

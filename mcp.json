@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "tokportal": {
+      "url": "https://app.tokportal.com/api/ext/mcp"
+    }
+  }
+}
