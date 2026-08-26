@@ -3,7 +3,7 @@ name: tokportal-launch-network
 description: Launch a network of real TikTok or Instagram accounts in a target country with TokPortal — size the order with credit costs, create one bundle or a bulk batch (accounts + video slots + optional Advanced Niche Warming), configure each account profile, upload media and configure the first videos, check publish readiness, publish, then track delivery through the bundle lifecycle (pending_setup → published → accepted → completed) with webhooks or polling. Use when the user wants new geo-targeted accounts created and operated at scale, e.g. "spin up 20 US TikTok accounts with 5 videos each".
 metadata:
   author: TokPortal
-  version: "1.0.0"
+  version: "1.1.0"
   homepage: https://developers.tokportal.com/create-bundle
 ---
 
@@ -52,7 +52,8 @@ For every bundle in `pending_setup`, call `tokportal_configure_bundle_account` w
 
 - Video files: `tokportal_upload_video_direct` (`file_path`, `bundle_id`) → use `public_url` as `video_url`. Any public external URL (Drive, Dropbox, direct link) also works as `video_url`: TokPortal downloads and re-hosts it.
 - Presigned alternative for browsers: `tokportal_upload_video` (never with `idempotency_key`) → PUT the file to `upload_url` with the given Content-Type → use `public_url`.
-- `tokportal_batch_configure_bundle_videos` with `body: {videos: [{position, video_type: "video", video_url, description, target_publish_date: "YYYY-MM-DD", instagram_content_type ("reel"|"post", Instagram only), tiktok_sound_url (optional)}]}`. Dates: ≥ 3 days ahead for a new account, ≥ 1 day for an existing one; **max 3 videos per day per bundle** (`VIDEOS_PER_DAY_EXCEEDED`). Sound volume fields cost 1 credit the first time; `story_repost_url` / `instant_repost_as_story` cost 1 credit each. Detail: `tokportal-post-videos-at-scale`.
+- `tokportal_batch_configure_bundle_videos` with `body: {videos: [{position, video_type: "video", video_url, description, target_publish_date: "YYYY-MM-DD", instagram_content_type ("reel"|"post", Instagram only), tiktok_sound_url (optional)}], auto_publish?}`. `auto_publish` is **top-level only** — one publish attempt for the whole call; inside a `videos[]` item it is rejected.
+- `target_publish_date` is the **first day of a 2-day window** (the manager may post that day or the next); the end day is derived and cannot be set when configuring — `target_publish_end_date` is rejected here (`UNKNOWN_FIELD`) and only `tokportal_patch_bundle_video` accepts an explicit window. Lead time: ≥ 3 days ahead while the account is still being created, ≥ 1 day for an existing or delivered account (`INVALID_DATE` → `details.earliest_allowed`); **max 3 videos per day per bundle** (`VIDEOS_PER_DAY_EXCEEDED`). Sound volume fields cost 1 credit the first time; `story_repost_url` / `instant_repost_as_story` cost 1 credit each. Detail: `tokportal-post-videos-at-scale`.
 - `account_and_videos` bundles need at least 1 configured video to publish; slots can be filled later and pushed with `tokportal_publish_all_bundle_videos` once the bundle is active.
 
 ## 6. Check readiness, then publish
@@ -60,7 +61,8 @@ For every bundle in `pending_setup`, call `tokportal_configure_bundle_account` w
 1. `tokportal_get_bundle_publish_readiness` (read-only) for each bundle → fix every `blockers[]` entry (`ACCOUNT_MISSING_FIELDS`, `NO_VIDEOS_CONFIGURED`, `BUNDLE_ALREADY_PUBLISHED`, ...).
 2. Confirm with the user, then `tokportal_publish_bundle` per bundle. Publishing is free (already paid) but irreversible once a manager accepts. `capacity_cooldown` (429) → the workspace's rolling publication capacity is exhausted; wait and retry later, do not spam.
 3. Optional shortcut: `auto_publish: true` on the video configuration call publishes immediately after a successful configuration.
-4. To edit the account after publishing, `tokportal_unpublish_bundle` first (destructive; ask; `already_accepted` means too late).
+4. Publish results may carry `adjusted_videos: [{video_id, position, previous_date, new_date}]` + `adjusted_videos_note` when a date no longer cleared the lead time. Report the adjusted calendar, not the requested one.
+5. To edit the account after publishing, `tokportal_unpublish_bundle` first (destructive; ask; `already_accepted` means too late).
 
 ## 7. Track delivery
 
